@@ -1,60 +1,39 @@
 import React, { useEffect, useState } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
-import { StatusBar } from 'expo-status-bar';
-import { Provider as PaperProvider } from 'react-native-paper';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import NetInfo from '@react-native-community/netinfo';
-import * as Notifications from 'expo-notifications';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 // Screens
-import SplashScreen from './src/screens/SplashScreen';
-import OnboardingScreen from './src/screens/OnboardingScreen';
-import AuthScreen from './src/screens/AuthScreen';
-import MainTabNavigator from './src/navigation/MainTabNavigator';
+import SplashScreen from './screens/SplashScreen';
+import OnboardingScreen from './screens/OnboardingScreen';
+import AuthScreen from './screens/AuthScreen';
+import MainLayout from './components/MainLayout';
 
 // Services
-import { AuthService } from './src/services/AuthService';
-import { NotificationService } from './src/services/NotificationService';
+import { AuthService } from './services/AuthService';
 
 // Context
-import { AuthProvider } from './src/context/AuthContext';
-import { ThemeProvider } from './src/context/ThemeContext';
-import { DataProvider } from './src/context/DataContext';
+import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { DataProvider } from './context/DataContext';
 
 // Types
-import { User } from './src/types';
-
-const Stack = createStackNavigator();
-
-// Configure notifications
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+import { User } from './types';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [isFirstLaunch, setIsFirstLaunch] = useState(false);
-  const [isConnected, setIsConnected] = useState(true);
 
   useEffect(() => {
     initializeApp();
-    setupNetworkListener();
-    setupNotifications();
   }, []);
 
   const initializeApp = async () => {
     try {
       // Check if first launch
-      const hasLaunched = await AsyncStorage.getItem('hasLaunched');
+      const hasLaunched = localStorage.getItem('hasLaunched');
       if (!hasLaunched) {
         setIsFirstLaunch(true);
-        await AsyncStorage.setItem('hasLaunched', 'true');
+        localStorage.setItem('hasLaunched', 'true');
       }
 
       // Check for existing user session
@@ -67,18 +46,6 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const setupNetworkListener = () => {
-    const unsubscribe = NetInfo.addEventListener(state => {
-      setIsConnected(state.isConnected ?? false);
-    });
-
-    return unsubscribe;
-  };
-
-  const setupNotifications = async () => {
-    await NotificationService.initialize();
   };
 
   const handleAuthSuccess = (userData: User) => {
@@ -96,37 +63,33 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <PaperProvider>
-        <AuthProvider value={{ user, onAuthSuccess: handleAuthSuccess, onLogout: handleLogout }}>
-          <DataProvider>
-            <NavigationContainer>
-              <StatusBar style="auto" />
-              <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <AuthProvider value={{ user, onAuthSuccess: handleAuthSuccess, onLogout: handleLogout }}>
+        <DataProvider>
+          <Router>
+            <div className="App">
+              <Routes>
                 {isFirstLaunch && (
-                  <Stack.Screen 
-                    name="Onboarding" 
-                    component={OnboardingScreen}
-                    options={{ gestureEnabled: false }}
-                  />
+                  <Route path="/onboarding" element={<OnboardingScreen />} />
                 )}
                 {!user ? (
-                  <Stack.Screen 
-                    name="Auth" 
-                    component={AuthScreen}
-                    options={{ gestureEnabled: false }}
-                  />
+                  <>
+                    <Route path="/auth" element={<AuthScreen />} />
+                    <Route path="*" element={<Navigate to="/auth" replace />} />
+                  </>
                 ) : (
-                  <Stack.Screen 
-                    name="Main" 
-                    component={MainTabNavigator}
-                    options={{ gestureEnabled: false }}
-                  />
+                  <>
+                    <Route path="/*" element={<MainLayout />} />
+                    <Route path="/auth" element={<Navigate to="/" replace />} />
+                  </>
                 )}
-              </Stack.Navigator>
-            </NavigationContainer>
-          </DataProvider>
-        </AuthProvider>
-      </PaperProvider>
+                {isFirstLaunch && (
+                  <Route path="/" element={<Navigate to="/onboarding" replace />} />
+                )}
+              </Routes>
+            </div>
+          </Router>
+        </DataProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }

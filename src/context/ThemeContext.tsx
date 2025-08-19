@@ -1,6 +1,4 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useColorScheme } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Theme = 'light' | 'dark' | 'auto';
 
@@ -48,16 +46,15 @@ const darkColors = {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const systemColorScheme = useColorScheme();
   const [theme, setThemeState] = useState<Theme>('auto');
 
   useEffect(() => {
     loadTheme();
   }, []);
 
-  const loadTheme = async () => {
+  const loadTheme = () => {
     try {
-      const savedTheme = await AsyncStorage.getItem('theme');
+      const savedTheme = localStorage.getItem('theme');
       if (savedTheme && ['light', 'dark', 'auto'].includes(savedTheme)) {
         setThemeState(savedTheme as Theme);
       }
@@ -66,17 +63,33 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const setTheme = async (newTheme: Theme) => {
+  const setTheme = (newTheme: Theme) => {
     try {
       setThemeState(newTheme);
-      await AsyncStorage.setItem('theme', newTheme);
+      localStorage.setItem('theme', newTheme);
     } catch (error) {
       console.error('Failed to save theme:', error);
     }
   };
 
-  const isDark = theme === 'dark' || (theme === 'auto' && systemColorScheme === 'dark');
+  const getSystemColorScheme = (): 'light' | 'dark' => {
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return 'light';
+  };
+
+  const isDark = theme === 'dark' || (theme === 'auto' && getSystemColorScheme() === 'dark');
   const colors = isDark ? darkColors : lightColors;
+
+  // Apply theme to document
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDark]);
 
   const value: ThemeContextType = {
     theme,
